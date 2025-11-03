@@ -21,6 +21,12 @@ export default function TabLayout() {
       label: 'VPS',
     },
     {
+      name: 'p2p',
+      route: '/(tabs)/p2p',
+      icon: 'wifi',
+      label: 'P2P',
+    },
+    {
       name: 'settings',
       route: '/(tabs)/settings',
       icon: 'gear',
@@ -39,6 +45,10 @@ export default function TabLayout() {
         <NativeTabs.Trigger name="vps">
           <Icon sf="server.rack" drawable="ic_server" />
           <Label>VPS</Label>
+        </NativeTabs.Trigger>
+        <NativeTabs.Trigger name="p2p">
+          <Icon sf="wifi" drawable="ic_wifi" />
+          <Label>P2P</Label>
         </NativeTabs.Trigger>
         <NativeTabs.Trigger name="settings">
           <Icon sf="gear" drawable="ic_settings" />
@@ -59,6 +69,7 @@ export default function TabLayout() {
       >
         <Stack.Screen name="(home)" />
         <Stack.Screen name="vps" />
+        <Stack.Screen name="p2p" />
         <Stack.Screen name="settings" />
       </Stack>
       <FloatingTabBar tabs={tabs} />

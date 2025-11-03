@@ -89,6 +89,26 @@ export default function RootLayout() {
               {/* Main app with tabs */}
               <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
 
+              {/* P2P Screens */}
+              <Stack.Screen
+                name="p2p-settings"
+                options={{
+                  headerShown: false,
+                }}
+              />
+              <Stack.Screen
+                name="payment"
+                options={{
+                  headerShown: false,
+                }}
+              />
+              <Stack.Screen
+                name="p2p-info"
+                options={{
+                  headerShown: false,
+                }}
+              />
+
               {/* Modal Demo Screens */}
               <Stack.Screen
                 name="modal"
