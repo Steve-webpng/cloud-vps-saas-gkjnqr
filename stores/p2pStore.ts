@@ -18,9 +18,12 @@ interface P2PStore {
   transactions: PaymentTransaction[];
   settings: P2PSettings;
   isSharing: boolean;
+  isConnectedAsReceiver: boolean;
+  isDemoMode: boolean;
   totalEarnings: number;
   totalSpent: number;
   loading: boolean;
+  activeReceiverConnection: P2PConnection | null;
 
   // Actions
   setConnections: (connections: P2PConnection[]) => void;
@@ -35,6 +38,9 @@ interface P2PStore {
   toggleSharing: () => void;
   setLoading: (loading: boolean) => void;
   calculateDynamicPrice: (distance: number, demand: 'low' | 'medium' | 'high') => number;
+  connectAsReceiver: (node: NetworkNode) => Promise<void>;
+  disconnectAsReceiver: () => void;
+  activateFullFeatures: () => void;
 }
 
 // Mock data
@@ -243,9 +249,12 @@ export const useP2PStore = create<P2PStore>((set, get) => ({
   transactions: mockTransactions,
   settings: mockSettings,
   isSharing: true,
+  isConnectedAsReceiver: false,
+  isDemoMode: true,
   totalEarnings: 1.41,
   totalSpent: 0,
   loading: false,
+  activeReceiverConnection: null,
 
   setConnections: (connections) => set({ connections }),
 
@@ -316,5 +325,95 @@ export const useP2PStore = create<P2PStore>((set, get) => ({
     const finalPrice = baseRate * demandMultiplier * locationMultiplier;
 
     return Math.round(finalPrice * 1000) / 1000; // Round to 3 decimal places
+  },
+
+  connectAsReceiver: async (node: NetworkNode) => {
+    console.log('Connecting as receiver to node:', node.id);
+    set({ loading: true });
+
+    // Simulate VPN-like connection process
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+
+    const newConnection: P2PConnection = {
+      id: `receiver-${Date.now()}`,
+      peerId: node.id,
+      peerName: node.name,
+      peerLocation: {
+        latitude: node.location.latitude,
+        longitude: node.location.longitude,
+        address: node.location.address,
+        distance: node.distance || 0,
+      },
+      status: 'connected',
+      connectionType: 'consumer',
+      bandwidth: {
+        upload: 0,
+        download: node.bandwidth.download,
+        total: 0,
+      },
+      pricing: {
+        baseRate: node.price,
+        demandMultiplier: 1.5,
+        locationMultiplier: 1.3,
+        currentRate: node.price,
+      },
+      cost: 0,
+      startTime: new Date().toISOString(),
+      duration: 0,
+      quality: 'excellent',
+    };
+
+    set({
+      isConnectedAsReceiver: true,
+      activeReceiverConnection: newConnection,
+      loading: false,
+    });
+
+    // Add connection to list
+    get().addConnection(newConnection);
+
+    // Activate full features after successful connection
+    get().activateFullFeatures();
+
+    console.log('Successfully connected as receiver');
+  },
+
+  disconnectAsReceiver: () => {
+    const { activeReceiverConnection } = get();
+    
+    if (activeReceiverConnection) {
+      // Calculate final cost based on duration and data usage
+      const durationInHours = activeReceiverConnection.duration / 3600;
+      const estimatedDataUsage = durationInHours * 0.5; // Estimate 0.5 GB per hour
+      const finalCost = estimatedDataUsage * activeReceiverConnection.pricing.currentRate;
+
+      // Create payment transaction
+      const transaction: PaymentTransaction = {
+        id: `txn-${Date.now()}`,
+        type: 'payment',
+        amount: finalCost,
+        currency: 'USD',
+        status: 'completed',
+        connectionId: activeReceiverConnection.id,
+        timestamp: new Date().toISOString(),
+        stripePaymentId: `pi_${Math.random().toString(36).substring(7)}`,
+      };
+
+      get().addTransaction(transaction);
+      get().removeConnection(activeReceiverConnection.id);
+    }
+
+    set({
+      isConnectedAsReceiver: false,
+      activeReceiverConnection: null,
+      isDemoMode: true,
+    });
+
+    console.log('Disconnected as receiver');
+  },
+
+  activateFullFeatures: () => {
+    console.log('Activating full features - Demo mode disabled');
+    set({ isDemoMode: false });
   },
 }));
