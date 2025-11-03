@@ -13,17 +13,17 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, commonStyles } from '@/styles/commonStyles';
-import { IconSymbol } from '@/components/IconSymbol';
 import { useP2PStore } from '@/stores/p2pStore';
-import BandwidthMonitor from '@/components/BandwidthMonitor';
-import ConnectionCard from '@/components/ConnectionCard';
-import NetworkNodeCard from '@/components/NetworkNodeCard';
 import { useRouter } from 'expo-router';
+import { IconSymbol } from '@/components/IconSymbol';
+import ConnectionCard from '@/components/ConnectionCard';
+import BandwidthMonitor from '@/components/BandwidthMonitor';
+import NetworkNodeCard from '@/components/NetworkNodeCard';
+import { geminiService } from '@/services/geminiService';
 
-type TabType = 'sharing' | 'discover';
+type TabType = 'sharing' | 'receiving';
 
 export default function P2PScreen() {
-  const router = useRouter();
   const {
     connections,
     availableNodes,
@@ -34,143 +34,88 @@ export default function P2PScreen() {
     totalEarnings,
     totalSpent,
     activeReceiverConnection,
-    loading,
     toggleSharing,
-    removeConnection,
-    addConnection,
-    updateBandwidthStats,
     connectAsReceiver,
     disconnectAsReceiver,
-    updateConnection,
+    removeConnection,
+    setLoading,
+    loading,
   } = useP2PStore();
 
   const [activeTab, setActiveTab] = useState<TabType>('sharing');
   const [refreshing, setRefreshing] = useState(false);
-  const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [selectedNode, setSelectedNode] = useState<any>(null);
+  const [showConnectionModal, setShowConnectionModal] = useState(false);
+  const [aiOptimization, setAiOptimization] = useState<string>('');
+  const [showAiModal, setShowAiModal] = useState(false);
+  const [loadingAi, setLoadingAi] = useState(false);
 
-  // Simulate real-time bandwidth updates
+  const router = useRouter();
+
   useEffect(() => {
-    if (!isSharing && !isConnectedAsReceiver) return;
-
-    const interval = setInterval(() => {
-      const randomUpload = Math.random() * 20 + 5;
-      const randomDownload = Math.random() * 15 + 3;
-
-      updateBandwidthStats({
-        current: {
-          upload: randomUpload,
-          download: randomDownload,
-        },
-      });
-
-      // Update receiver connection duration and cost
-      if (isConnectedAsReceiver && activeReceiverConnection) {
-        const newDuration = activeReceiverConnection.duration + 3;
-        const dataUsed = (newDuration / 3600) * 0.5; // 0.5 GB per hour
-        const currentCost = dataUsed * activeReceiverConnection.pricing.currentRate;
-
-        updateConnection(activeReceiverConnection.id, {
-          duration: newDuration,
-          cost: currentCost,
-          bandwidth: {
-            ...activeReceiverConnection.bandwidth,
-            total: dataUsed,
-          },
-        });
-      }
-    }, 3000);
-
-    return () => clearInterval(interval);
-  }, [isSharing, isConnectedAsReceiver, activeReceiverConnection]);
+    if (isSharing || isConnectedAsReceiver) {
+      console.log('P2P active - Demo mode:', isDemoMode);
+    }
+  }, [isSharing, isConnectedAsReceiver, isDemoMode]);
 
   const handleToggleSharing = () => {
-    toggleSharing();
-    Alert.alert(
-      isSharing ? 'Sharing Stopped' : 'Sharing Started',
-      isSharing
-        ? 'You have stopped sharing your internet connection.'
-        : 'You are now sharing your internet connection with nearby peers.'
-    );
-  };
-
-  const handleDisconnect = (connectionId: string) => {
-    const connection = connections.find((c) => c.id === connectionId);
-    
-    if (connection?.connectionType === 'consumer') {
+    if (isSharing) {
       Alert.alert(
-        'Disconnect from Network',
-        'Are you sure you want to disconnect? You will lose internet access.',
+        'Stop Sharing',
+        'Are you sure you want to stop sharing your internet?',
         [
           { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Disconnect',
-            style: 'destructive',
-            onPress: () => {
-              disconnectAsReceiver();
-              Alert.alert('Disconnected', 'You have been disconnected from the network.');
-            },
-          },
+          { text: 'Stop', style: 'destructive', onPress: toggleSharing },
         ]
       );
     } else {
-      Alert.alert(
-        'Disconnect Peer',
-        'Are you sure you want to disconnect from this peer?',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Disconnect',
-            style: 'destructive',
-            onPress: () => {
-              removeConnection(connectionId);
-              Alert.alert('Disconnected', 'Peer has been disconnected successfully.');
-            },
-          },
-        ]
-      );
+      toggleSharing();
     }
+  };
+
+  const handleDisconnect = (connectionId: string) => {
+    Alert.alert(
+      'Disconnect',
+      'Are you sure you want to disconnect?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Disconnect',
+          style: 'destructive',
+          onPress: () => {
+            if (activeReceiverConnection?.id === connectionId) {
+              disconnectAsReceiver();
+            } else {
+              removeConnection(connectionId);
+            }
+          },
+        },
+      ]
+    );
   };
 
   const handleConnect = (nodeId: string) => {
-    const node = availableNodes.find((n) => n.id === nodeId);
-    if (!node) return;
-
-    setSelectedNode(node);
-    setShowPaymentModal(true);
+    const node = availableNodes.find(n => n.id === nodeId);
+    if (node && node.available) {
+      setSelectedNode(node);
+      setShowConnectionModal(true);
+    }
   };
 
   const handleConfirmConnection = async () => {
-    if (!selectedNode) return;
-
-    setShowPaymentModal(false);
-
-    try {
-      await connectAsReceiver(selectedNode);
-      
-      Alert.alert(
-        'Connected Successfully! 🎉',
-        `You are now connected to ${selectedNode.name}.\n\n✓ Full internet access enabled\n✓ Browse any website\n✓ All app features activated\n✓ Demo restrictions removed\n\nYou will be charged $${selectedNode.price.toFixed(3)}/GB`,
-        [
-          {
-            text: 'Start Browsing',
-            onPress: () => router.push('/browser'),
-          },
-          {
-            text: 'OK',
-            style: 'cancel',
-          },
-        ]
-      );
-    } catch (error) {
-      Alert.alert('Connection Failed', 'Unable to connect to the network. Please try again.');
+    if (!selectedNode) {
+      return;
     }
+
+    setShowConnectionModal(false);
+    await connectAsReceiver(selectedNode);
+    setSelectedNode(null);
+    setActiveTab('receiving');
   };
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    // Simulate network refresh
-    await new Promise((resolve) => setTimeout(resolve, 1500));
+    await new Promise(resolve => setTimeout(resolve, 1000));
     setRefreshing(false);
   };
 
@@ -183,27 +128,43 @@ export default function P2PScreen() {
   };
 
   const handleBrowse = () => {
-    if (isConnectedAsReceiver) {
-      router.push('/browser');
-    } else {
+    if (isDemoMode) {
       Alert.alert(
-        'Connect First',
-        'Please connect to a network node to access the browser.',
-        [
-          {
-            text: 'View Nodes',
-            onPress: () => setActiveTab('discover'),
-          },
-          {
-            text: 'OK',
-            style: 'cancel',
-          },
-        ]
+        'Demo Mode',
+        'Connect to a P2P network to unlock the browser and all features.',
+        [{ text: 'OK' }]
       );
+    } else {
+      router.push('/browser');
     }
   };
 
-  const activeConnections = connections.filter((c) => c.status === 'connected');
+  const handleAiOptimization = async () => {
+    setLoadingAi(true);
+    setShowAiModal(true);
+
+    try {
+      const response = await geminiService.getNetworkOptimization({
+        upload: bandwidthStats.current.upload,
+        download: bandwidthStats.current.download,
+        connections: connections.length,
+      });
+
+      if (response.success) {
+        setAiOptimization(response.text);
+      } else {
+        setAiOptimization('Unable to generate optimization suggestions at this time. Please try again later.');
+      }
+    } catch (error) {
+      console.error('AI optimization error:', error);
+      setAiOptimization('An error occurred while generating suggestions.');
+    } finally {
+      setLoadingAi(false);
+    }
+  };
+
+  const providerConnections = connections.filter(c => c.connectionType === 'provider');
+  const consumerConnections = connections.filter(c => c.connectionType === 'consumer');
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -211,27 +172,27 @@ export default function P2PScreen() {
         <View>
           <Text style={styles.headerTitle}>P2P Network</Text>
           <Text style={styles.headerSubtitle}>
-            {isConnectedAsReceiver
-              ? '🌐 Connected - Full Access'
-              : isDemoMode
-              ? '⚠️ Demo Mode'
-              : isSharing
-              ? 'Sharing Active'
-              : 'Sharing Inactive'}
+            {isSharing ? 'Sharing Active' : 'Not Sharing'} • {isConnectedAsReceiver ? 'Connected' : 'Disconnected'}
           </Text>
         </View>
-        <View style={styles.headerButtons}>
-          <Pressable
-            style={styles.infoButton}
-            onPress={() => router.push('/p2p-info')}
-          >
-            <IconSymbol name="info.circle" size={24} color={colors.text} />
+        <View style={styles.headerActions}>
+          <Pressable style={styles.aiButton} onPress={handleAiOptimization}>
+            <IconSymbol name="sparkles" size={20} color={colors.primary} />
           </Pressable>
           <Pressable style={styles.settingsButton} onPress={handleSettings}>
-            <IconSymbol name="gear" size={24} color={colors.text} />
+            <IconSymbol name="gearshape.fill" size={20} color={colors.primary} />
           </Pressable>
         </View>
       </View>
+
+      {isDemoMode && (
+        <View style={styles.demoBanner}>
+          <IconSymbol name="exclamationmark.triangle.fill" size={20} color={colors.warning} />
+          <Text style={styles.demoText}>
+            Demo Mode - Connect to unlock all features
+          </Text>
+        </View>
+      )}
 
       <ScrollView
         style={styles.scrollView}
@@ -241,105 +202,45 @@ export default function P2PScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
         }
       >
-        {/* Demo Mode Warning */}
-        {isDemoMode && !isConnectedAsReceiver && (
-          <View style={styles.demoWarning}>
-            <IconSymbol name="exclamationmark.triangle.fill" size={24} color={colors.warning} />
-            <View style={styles.demoWarningText}>
-              <Text style={styles.demoWarningTitle}>Demo Mode Active</Text>
-              <Text style={styles.demoWarningSubtitle}>
-                Connect to a network node to unlock full features and browse the internet
-              </Text>
-            </View>
+        {/* Stats Cards */}
+        <View style={styles.statsContainer}>
+          <View style={styles.statCard}>
+            <IconSymbol name="dollarsign.circle.fill" size={32} color={colors.success} />
+            <Text style={styles.statValue}>${totalEarnings.toFixed(2)}</Text>
+            <Text style={styles.statLabel}>Total Earned</Text>
           </View>
-        )}
-
-        {/* Connected Status Card */}
-        {isConnectedAsReceiver && activeReceiverConnection && (
-          <View style={styles.connectedCard}>
-            <View style={styles.connectedHeader}>
-              <IconSymbol name="checkmark.circle.fill" size={32} color={colors.success} />
-              <View style={styles.connectedInfo}>
-                <Text style={styles.connectedTitle}>Connected to Network</Text>
-                <Text style={styles.connectedSubtitle}>{activeReceiverConnection.peerName}</Text>
-              </View>
-            </View>
-            <View style={styles.connectedStats}>
-              <View style={styles.connectedStat}>
-                <Text style={styles.connectedStatLabel}>Data Used</Text>
-                <Text style={styles.connectedStatValue}>
-                  {activeReceiverConnection.bandwidth.total.toFixed(2)} GB
-                </Text>
-              </View>
-              <View style={styles.connectedStat}>
-                <Text style={styles.connectedStatLabel}>Current Cost</Text>
-                <Text style={styles.connectedStatValue}>
-                  ${(activeReceiverConnection.cost || 0).toFixed(2)}
-                </Text>
-              </View>
-              <View style={styles.connectedStat}>
-                <Text style={styles.connectedStatLabel}>Duration</Text>
-                <Text style={styles.connectedStatValue}>
-                  {Math.floor(activeReceiverConnection.duration / 60)}m
-                </Text>
-              </View>
-            </View>
-            <Pressable style={styles.browseButton} onPress={handleBrowse}>
-              <IconSymbol name="globe" size={18} color={colors.white} />
-              <Text style={styles.browseButtonText}>Open Browser</Text>
-            </Pressable>
+          <View style={styles.statCard}>
+            <IconSymbol name="arrow.down.circle.fill" size={32} color={colors.error} />
+            <Text style={styles.statValue}>${totalSpent.toFixed(2)}</Text>
+            <Text style={styles.statLabel}>Total Spent</Text>
           </View>
-        )}
-
-        {/* Status Card */}
-        <View style={styles.statusCard}>
-          <View style={styles.statusHeader}>
-            <View style={styles.statusInfo}>
-              <IconSymbol
-                name={isSharing ? 'wifi' : 'wifi.slash'}
-                size={32}
-                color={isSharing ? colors.success : colors.textSecondary}
-              />
-              <View style={styles.statusText}>
-                <Text style={styles.statusTitle}>
-                  {isSharing ? 'Sharing Internet' : 'Not Sharing'}
-                </Text>
-                <Text style={styles.statusSubtitle}>
-                  {activeConnections.length} active connection{activeConnections.length !== 1 ? 's' : ''}
-                </Text>
-              </View>
-            </View>
-            <Pressable
-              style={[styles.toggleButton, isSharing && styles.toggleButtonActive]}
-              onPress={handleToggleSharing}
-            >
-              <Text style={[styles.toggleText, isSharing && styles.toggleTextActive]}>
-                {isSharing ? 'Stop' : 'Start'}
-              </Text>
-            </Pressable>
-          </View>
-
-          <View style={styles.earningsContainer}>
-            <View style={styles.earningItem}>
-              <Text style={styles.earningLabel}>Total Earnings</Text>
-              <Text style={styles.earningValue}>${totalEarnings.toFixed(2)}</Text>
-            </View>
-            <View style={styles.earningItem}>
-              <Text style={styles.earningLabel}>Total Spent</Text>
-              <Text style={styles.earningValue}>${totalSpent.toFixed(2)}</Text>
-            </View>
-          </View>
-
-          <Pressable style={styles.paymentButton} onPress={handlePayment}>
-            <IconSymbol name="creditcard.fill" size={18} color={colors.white} />
-            <Text style={styles.paymentButtonText}>Manage Payments</Text>
-          </Pressable>
         </View>
 
         {/* Bandwidth Monitor */}
-        {(isSharing || isConnectedAsReceiver) && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Bandwidth Monitor</Text>
           <BandwidthMonitor stats={bandwidthStats} isActive={isSharing || isConnectedAsReceiver} />
-        )}
+        </View>
+
+        {/* Quick Actions */}
+        <View style={styles.quickActions}>
+          <Pressable
+            style={[styles.actionButton, styles.actionButtonPrimary]}
+            onPress={handlePayment}
+          >
+            <IconSymbol name="creditcard.fill" size={24} color={colors.white} />
+            <Text style={styles.actionButtonText}>Payments</Text>
+          </Pressable>
+          <Pressable
+            style={[styles.actionButton, styles.actionButtonSecondary]}
+            onPress={handleBrowse}
+          >
+            <IconSymbol name="globe" size={24} color={colors.primary} />
+            <Text style={[styles.actionButtonText, styles.actionButtonTextSecondary]}>
+              Browse
+            </Text>
+          </Pressable>
+        </View>
 
         {/* Tabs */}
         <View style={styles.tabContainer}>
@@ -348,135 +249,162 @@ export default function P2PScreen() {
             onPress={() => setActiveTab('sharing')}
           >
             <Text style={[styles.tabText, activeTab === 'sharing' && styles.tabTextActive]}>
-              My Connections
+              Sharing ({providerConnections.length})
             </Text>
           </Pressable>
           <Pressable
-            style={[styles.tab, activeTab === 'discover' && styles.tabActive]}
-            onPress={() => setActiveTab('discover')}
+            style={[styles.tab, activeTab === 'receiving' && styles.tabActive]}
+            onPress={() => setActiveTab('receiving')}
           >
-            <Text style={[styles.tabText, activeTab === 'discover' && styles.tabTextActive]}>
-              Discover Nodes
+            <Text style={[styles.tabText, activeTab === 'receiving' && styles.tabTextActive]}>
+              Receiving
             </Text>
           </Pressable>
         </View>
 
-        {/* Content */}
-        {activeTab === 'sharing' ? (
-          <View style={styles.content}>
-            {connections.length === 0 ? (
-              <View style={styles.emptyState}>
-                <IconSymbol name="link.circle" size={64} color={colors.textSecondary} />
-                <Text style={styles.emptyTitle}>No Active Connections</Text>
-                <Text style={styles.emptySubtitle}>
-                  Start sharing to connect with nearby peers or connect to a node to receive internet
+        {/* Sharing Tab */}
+        {activeTab === 'sharing' && (
+          <View style={styles.tabContent}>
+            <View style={styles.sharingHeader}>
+              <Text style={styles.sectionTitle}>Internet Sharing</Text>
+              <Pressable
+                style={[styles.toggleButton, isSharing && styles.toggleButtonActive]}
+                onPress={handleToggleSharing}
+              >
+                <Text style={[styles.toggleText, isSharing && styles.toggleTextActive]}>
+                  {isSharing ? 'Stop Sharing' : 'Start Sharing'}
                 </Text>
-              </View>
-            ) : (
-              connections.map((connection) => (
+              </Pressable>
+            </View>
+
+            {providerConnections.length > 0 ? (
+              providerConnections.map(connection => (
                 <ConnectionCard
                   key={connection.id}
                   connection={connection}
                   onDisconnect={handleDisconnect}
                 />
               ))
-            )}
-          </View>
-        ) : (
-          <View style={styles.content}>
-            {availableNodes.length === 0 ? (
+            ) : (
               <View style={styles.emptyState}>
-                <IconSymbol name="wifi.slash" size={64} color={colors.textSecondary} />
-                <Text style={styles.emptyTitle}>No Nodes Available</Text>
-                <Text style={styles.emptySubtitle}>
-                  No network nodes found in your area
+                <IconSymbol name="wifi.slash" size={48} color={colors.textSecondary} />
+                <Text style={styles.emptyText}>
+                  {isSharing ? 'Waiting for connections...' : 'Start sharing to earn'}
                 </Text>
               </View>
-            ) : (
-              availableNodes.map((node) => (
-                <NetworkNodeCard
-                  key={node.id}
-                  node={node}
-                  onConnect={handleConnect}
-                />
-              ))
             )}
+          </View>
+        )}
+
+        {/* Receiving Tab */}
+        {activeTab === 'receiving' && (
+          <View style={styles.tabContent}>
+            <Text style={styles.sectionTitle}>Available Networks</Text>
+
+            {isConnectedAsReceiver && activeReceiverConnection && (
+              <View style={styles.connectedSection}>
+                <View style={styles.connectedBadge}>
+                  <IconSymbol name="checkmark.circle.fill" size={20} color={colors.success} />
+                  <Text style={styles.connectedText}>Connected</Text>
+                </View>
+                <ConnectionCard
+                  connection={activeReceiverConnection}
+                  onDisconnect={handleDisconnect}
+                />
+              </View>
+            )}
+
+            {availableNodes.map(node => (
+              <NetworkNodeCard
+                key={node.id}
+                node={node}
+                onConnect={handleConnect}
+              />
+            ))}
           </View>
         )}
       </ScrollView>
 
-      {/* Payment Confirmation Modal */}
+      {/* Connection Confirmation Modal */}
       <Modal
-        visible={showPaymentModal}
+        visible={showConnectionModal}
         transparent
         animationType="fade"
-        onRequestClose={() => setShowPaymentModal(false)}
+        onRequestClose={() => setShowConnectionModal(false)}
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <IconSymbol name="wifi" size={48} color={colors.primary} />
-              <Text style={styles.modalTitle}>Connect to Network</Text>
-            </View>
-
+            <Text style={styles.modalTitle}>Connect to Network</Text>
             {selectedNode && (
-              <View style={styles.modalBody}>
-                <Text style={styles.modalNodeName}>{selectedNode.name}</Text>
-                <Text style={styles.modalNodeAddress}>{selectedNode.location.address}</Text>
-
+              <>
+                <Text style={styles.modalText}>
+                  Connect to {selectedNode.name}?
+                </Text>
                 <View style={styles.modalDetails}>
-                  <View style={styles.modalDetailRow}>
-                    <Text style={styles.modalDetailLabel}>Speed:</Text>
-                    <Text style={styles.modalDetailValue}>
-                      {selectedNode.bandwidth.download} Mbps
-                    </Text>
-                  </View>
-                  <View style={styles.modalDetailRow}>
-                    <Text style={styles.modalDetailLabel}>Price:</Text>
-                    <Text style={styles.modalDetailValue}>
-                      ${selectedNode.price.toFixed(3)}/GB
-                    </Text>
-                  </View>
-                  <View style={styles.modalDetailRow}>
-                    <Text style={styles.modalDetailLabel}>Rating:</Text>
-                    <Text style={styles.modalDetailValue}>
-                      ⭐ {selectedNode.rating.toFixed(1)}
-                    </Text>
-                  </View>
+                  <Text style={styles.modalDetailText}>
+                    Price: ${selectedNode.price}/GB
+                  </Text>
+                  <Text style={styles.modalDetailText}>
+                    Distance: {selectedNode.distance} km
+                  </Text>
+                  <Text style={styles.modalDetailText}>
+                    Rating: {selectedNode.rating} ⭐
+                  </Text>
                 </View>
-
-                <View style={styles.modalFeatures}>
-                  <Text style={styles.modalFeaturesTitle}>What you&apos;ll get:</Text>
-                  <Text style={styles.modalFeature}>✓ Full internet access</Text>
-                  <Text style={styles.modalFeature}>✓ Browse any website</Text>
-                  <Text style={styles.modalFeature}>✓ All app features unlocked</Text>
-                  <Text style={styles.modalFeature}>✓ Secure VPN-like connection</Text>
-                </View>
-
-                <View style={styles.modalActions}>
-                  <Pressable
-                    style={styles.modalCancelButton}
-                    onPress={() => setShowPaymentModal(false)}
-                  >
-                    <Text style={styles.modalCancelText}>Cancel</Text>
-                  </Pressable>
-                  <Pressable
-                    style={styles.modalConnectButton}
-                    onPress={handleConfirmConnection}
-                    disabled={loading}
-                  >
-                    {loading ? (
-                      <ActivityIndicator color={colors.white} />
-                    ) : (
-                      <>
-                        <IconSymbol name="link" size={18} color={colors.white} />
-                        <Text style={styles.modalConnectText}>Connect & Pay</Text>
-                      </>
-                    )}
-                  </Pressable>
-                </View>
-              </View>
+              </>
             )}
+            <View style={styles.modalActions}>
+              <Pressable
+                style={[styles.modalButton, styles.modalButtonCancel]}
+                onPress={() => setShowConnectionModal(false)}
+              >
+                <Text style={styles.modalButtonTextCancel}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.modalButton, styles.modalButtonConfirm]}
+                onPress={handleConfirmConnection}
+              >
+                {loading ? (
+                  <ActivityIndicator color={colors.white} />
+                ) : (
+                  <Text style={styles.modalButtonText}>Connect</Text>
+                )}
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* AI Optimization Modal */}
+      <Modal
+        visible={showAiModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowAiModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.aiModalHeader}>
+              <IconSymbol name="sparkles" size={24} color={colors.primary} />
+              <Text style={styles.modalTitle}>AI Optimization</Text>
+            </View>
+            {loadingAi ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color={colors.primary} />
+                <Text style={styles.loadingText}>Analyzing your network...</Text>
+              </View>
+            ) : (
+              <ScrollView style={styles.aiContent}>
+                <Text style={styles.aiText}>{aiOptimization}</Text>
+              </ScrollView>
+            )}
+            <Pressable
+              style={[styles.modalButton, styles.modalButtonConfirm, styles.fullWidth]}
+              onPress={() => setShowAiModal(false)}
+              disabled={loadingAi}
+            >
+              <Text style={styles.modalButtonText}>Close</Text>
+            </Pressable>
           </View>
         </View>
       </Modal>
@@ -499,34 +427,48 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.border,
   },
   headerTitle: {
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: '700',
     color: colors.text,
   },
   headerSubtitle: {
-    fontSize: 14,
+    fontSize: 13,
     color: colors.textSecondary,
-    marginTop: 2,
+    marginTop: 4,
   },
-  headerButtons: {
+  headerActions: {
     flexDirection: 'row',
     gap: 8,
   },
-  infoButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: colors.cardBackground,
+  aiButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.primaryLight,
     alignItems: 'center',
     justifyContent: 'center',
   },
   settingsButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: colors.cardBackground,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  demoBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.warningLight,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    gap: 12,
+  },
+  demoText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.warning,
+    flex: 1,
   },
   scrollView: {
     flex: 1,
@@ -535,182 +477,75 @@ const styles = StyleSheet.create({
     padding: 20,
     paddingBottom: 100,
   },
-  demoWarning: {
+  statsContainer: {
     flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.warningLight,
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
+    gap: 12,
+    marginBottom: 24,
   },
-  demoWarningText: {
+  statCard: {
     flex: 1,
-    marginLeft: 12,
-  },
-  demoWarningTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.warning,
-    marginBottom: 4,
-  },
-  demoWarningSubtitle: {
-    fontSize: 13,
-    color: colors.warning,
-  },
-  connectedCard: {
-    backgroundColor: colors.successLight,
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 16,
-    borderWidth: 2,
-    borderColor: colors.success,
-  },
-  connectedHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  connectedInfo: {
-    marginLeft: 12,
-    flex: 1,
-  },
-  connectedTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: colors.success,
-    marginBottom: 2,
-  },
-  connectedSubtitle: {
-    fontSize: 14,
-    color: colors.success,
-  },
-  connectedStats: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 16,
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: colors.success,
-  },
-  connectedStat: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  connectedStatLabel: {
-    fontSize: 12,
-    color: colors.success,
-    marginBottom: 4,
-  },
-  connectedStatValue: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: colors.success,
-  },
-  browseButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.success,
-    borderRadius: 10,
-    paddingVertical: 12,
-    gap: 8,
-  },
-  browseButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.white,
-  },
-  statusCard: {
     backgroundColor: colors.cardBackground,
     borderRadius: 16,
     padding: 20,
-    marginBottom: 16,
+    alignItems: 'center',
     boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.1)',
   },
-  statusHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  statusInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  statusText: {
-    marginLeft: 16,
-    flex: 1,
-  },
-  statusTitle: {
-    fontSize: 18,
-    fontWeight: '600',
+  statValue: {
+    fontSize: 24,
+    fontWeight: '700',
     color: colors.text,
-    marginBottom: 2,
+    marginTop: 12,
   },
-  statusSubtitle: {
-    fontSize: 14,
-    color: colors.textSecondary,
-  },
-  toggleButton: {
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 10,
-    backgroundColor: colors.primary,
-  },
-  toggleButtonActive: {
-    backgroundColor: colors.error,
-  },
-  toggleText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.white,
-  },
-  toggleTextActive: {
-    color: colors.white,
-  },
-  earningsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-  },
-  earningItem: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  earningLabel: {
+  statLabel: {
     fontSize: 13,
     color: colors.textSecondary,
-    marginBottom: 4,
+    marginTop: 4,
   },
-  earningValue: {
+  section: {
+    marginBottom: 24,
+  },
+  sectionTitle: {
     fontSize: 20,
     fontWeight: '700',
-    color: colors.primary,
+    color: colors.text,
+    marginBottom: 16,
   },
-  paymentButton: {
+  quickActions: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 24,
+  },
+  actionButton: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.primary,
-    borderRadius: 10,
-    paddingVertical: 12,
-    marginTop: 16,
+    borderRadius: 12,
+    padding: 16,
     gap: 8,
   },
-  paymentButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
+  actionButtonPrimary: {
+    backgroundColor: colors.primary,
+  },
+  actionButtonSecondary: {
+    backgroundColor: colors.cardBackground,
+    borderWidth: 2,
+    borderColor: colors.primary,
+  },
+  actionButtonText: {
+    fontSize: 16,
+    fontWeight: '700',
     color: colors.white,
+  },
+  actionButtonTextSecondary: {
+    color: colors.primary,
   },
   tabContainer: {
     flexDirection: 'row',
     backgroundColor: colors.cardBackground,
     borderRadius: 12,
     padding: 4,
-    marginBottom: 16,
+    marginBottom: 24,
   },
   tab: {
     flex: 1,
@@ -722,33 +557,69 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
   },
   tabText: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '600',
     color: colors.textSecondary,
   },
   tabTextActive: {
     color: colors.white,
   },
-  content: {
-    flex: 1,
+  tabContent: {
+    marginBottom: 24,
+  },
+  sharingHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  toggleButton: {
+    backgroundColor: colors.cardBackground,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 20,
+    borderWidth: 2,
+    borderColor: colors.primary,
+  },
+  toggleButtonActive: {
+    backgroundColor: colors.primary,
+  },
+  toggleText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.primary,
+  },
+  toggleTextActive: {
+    color: colors.white,
   },
   emptyState: {
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 60,
   },
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: colors.text,
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  emptySubtitle: {
-    fontSize: 14,
+  emptyText: {
+    fontSize: 16,
     color: colors.textSecondary,
-    textAlign: 'center',
-    paddingHorizontal: 20,
+    marginTop: 16,
+  },
+  connectedSection: {
+    marginBottom: 24,
+  },
+  connectedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.successLight,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    alignSelf: 'flex-start',
+    marginBottom: 12,
+    gap: 6,
+  },
+  connectedText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.success,
   },
   modalOverlay: {
     flex: 1,
@@ -760,36 +631,21 @@ const styles = StyleSheet.create({
   modalContent: {
     backgroundColor: colors.cardBackground,
     borderRadius: 20,
+    padding: 24,
     width: '100%',
     maxWidth: 400,
-    boxShadow: '0px 4px 16px rgba(0, 0, 0, 0.2)',
-  },
-  modalHeader: {
-    alignItems: 'center',
-    paddingTop: 32,
-    paddingHorizontal: 24,
+    maxHeight: '80%',
   },
   modalTitle: {
-    fontSize: 24,
+    fontSize: 20,
     fontWeight: '700',
     color: colors.text,
-    marginTop: 16,
+    marginBottom: 16,
   },
-  modalBody: {
-    padding: 24,
-  },
-  modalNodeName: {
-    fontSize: 20,
-    fontWeight: '600',
+  modalText: {
+    fontSize: 16,
     color: colors.text,
-    textAlign: 'center',
-    marginBottom: 8,
-  },
-  modalNodeAddress: {
-    fontSize: 14,
-    color: colors.textSecondary,
-    textAlign: 'center',
-    marginBottom: 24,
+    marginBottom: 16,
   },
   modalDetails: {
     backgroundColor: colors.background,
@@ -797,64 +653,63 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 24,
   },
-  modalDetailRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-  },
-  modalDetailLabel: {
-    fontSize: 14,
-    color: colors.textSecondary,
-  },
-  modalDetailValue: {
-    fontSize: 14,
-    fontWeight: '600',
+  modalDetailText: {
+    fontSize: 15,
     color: colors.text,
-  },
-  modalFeatures: {
-    marginBottom: 24,
-  },
-  modalFeaturesTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.text,
-    marginBottom: 12,
-  },
-  modalFeature: {
-    fontSize: 14,
-    color: colors.success,
     marginBottom: 8,
   },
   modalActions: {
     flexDirection: 'row',
     gap: 12,
   },
-  modalCancelButton: {
+  modalButton: {
     flex: 1,
     paddingVertical: 14,
     borderRadius: 12,
-    backgroundColor: colors.background,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  modalCancelText: {
+  modalButtonCancel: {
+    backgroundColor: colors.background,
+  },
+  modalButtonConfirm: {
+    backgroundColor: colors.primary,
+  },
+  modalButtonText: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '700',
+    color: colors.white,
+  },
+  modalButtonTextCancel: {
+    fontSize: 16,
+    fontWeight: '700',
     color: colors.text,
   },
-  modalConnectButton: {
-    flex: 1,
+  aiModalHeader: {
     flexDirection: 'row',
-    paddingVertical: 14,
-    borderRadius: 12,
-    backgroundColor: colors.primary,
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
+    gap: 12,
+    marginBottom: 16,
   },
-  modalConnectText: {
+  loadingContainer: {
+    alignItems: 'center',
+    paddingVertical: 40,
+  },
+  loadingText: {
     fontSize: 16,
-    fontWeight: '600',
-    color: colors.white,
+    color: colors.textSecondary,
+    marginTop: 16,
+  },
+  aiContent: {
+    maxHeight: 300,
+    marginBottom: 20,
+  },
+  aiText: {
+    fontSize: 15,
+    color: colors.text,
+    lineHeight: 22,
+  },
+  fullWidth: {
+    width: '100%',
   },
 });

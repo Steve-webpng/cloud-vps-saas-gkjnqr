@@ -15,6 +15,7 @@ import { colors } from '@/styles/commonStyles';
 import { IconSymbol } from '@/components/IconSymbol';
 import { useRouter } from 'expo-router';
 import { useP2PStore } from '@/stores/p2pStore';
+import { stripeService } from '@/services/stripeService';
 
 export default function PaymentScreen() {
   const router = useRouter();
@@ -51,22 +52,42 @@ export default function PaymentScreen() {
       return;
     }
 
+    // Validate card details
+    const validation = stripeService.validateCardDetails(cardNumber, expiryDate, cvv);
+    if (!validation.valid) {
+      Alert.alert('Invalid Card Details', validation.errors.join('\n'));
+      return;
+    }
+
     setIsProcessing(true);
 
-    // Simulate Stripe payment processing
-    setTimeout(() => {
-      setIsProcessing(false);
-      Alert.alert(
-        'Withdrawal Successful',
-        `$${totalEarnings.toFixed(2)} has been transferred to your card ending in ${cardNumber.slice(-4)}`,
-        [
-          {
-            text: 'OK',
-            onPress: () => router.back(),
-          },
-        ]
+    try {
+      // Process payout using Stripe
+      const result = await stripeService.processPayout(
+        totalEarnings,
+        `card_${cardNumber.slice(-4)}`
       );
-    }, 2000);
+
+      if (result.success) {
+        Alert.alert(
+          'Withdrawal Successful',
+          `${stripeService.formatAmount(totalEarnings)} has been transferred to your card ending in ${cardNumber.slice(-4)}.\n\nPayout ID: ${result.payoutId}`,
+          [
+            {
+              text: 'OK',
+              onPress: () => router.back(),
+            },
+          ]
+        );
+      } else {
+        Alert.alert('Withdrawal Failed', result.error || 'An error occurred during withdrawal');
+      }
+    } catch (error) {
+      console.error('Withdrawal error:', error);
+      Alert.alert('Error', 'An unexpected error occurred. Please try again.');
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   const recentTransactions = transactions.slice(0, 5);
@@ -92,11 +113,13 @@ export default function PaymentScreen() {
             <IconSymbol name="dollarsign.circle.fill" size={48} color={colors.success} />
             <View style={styles.earningsInfo}>
               <Text style={styles.earningsLabel}>Available Balance</Text>
-              <Text style={styles.earningsAmount}>${totalEarnings.toFixed(2)}</Text>
+              <Text style={styles.earningsAmount}>
+                {stripeService.formatAmount(totalEarnings)}
+              </Text>
             </View>
           </View>
           <Text style={styles.earningsNote}>
-            Minimum withdrawal: $10.00
+            Minimum withdrawal: {stripeService.formatAmount(10)}
           </Text>
         </View>
 
@@ -180,7 +203,7 @@ export default function PaymentScreen() {
               <>
                 <IconSymbol name="arrow.down.circle.fill" size={20} color={colors.white} />
                 <Text style={styles.withdrawText}>
-                  Withdraw ${totalEarnings.toFixed(2)}
+                  Withdraw {stripeService.formatAmount(totalEarnings)}
                 </Text>
               </>
             )}
@@ -213,6 +236,11 @@ export default function PaymentScreen() {
                   <Text style={styles.transactionDate}>
                     {new Date(transaction.timestamp).toLocaleDateString()}
                   </Text>
+                  {transaction.stripePaymentId && (
+                    <Text style={styles.transactionId}>
+                      ID: {transaction.stripePaymentId}
+                    </Text>
+                  )}
                 </View>
                 <View style={styles.transactionAmount}>
                   <Text
@@ -221,7 +249,8 @@ export default function PaymentScreen() {
                       transaction.type === 'earning' ? styles.transactionEarning : styles.transactionPayment,
                     ]}
                   >
-                    {transaction.type === 'earning' ? '+' : '-'}${transaction.amount.toFixed(2)}
+                    {transaction.type === 'earning' ? '+' : '-'}
+                    {stripeService.formatAmount(transaction.amount)}
                   </Text>
                   <View
                     style={[
@@ -243,7 +272,7 @@ export default function PaymentScreen() {
         <View style={styles.securityCard}>
           <IconSymbol name="lock.shield.fill" size={24} color={colors.success} />
           <Text style={styles.securityText}>
-            Your payment information is encrypted and secure. We never store your full card details.
+            Your payment information is encrypted and secure. We never store your full card details. All transactions are processed securely through Stripe.
           </Text>
         </View>
       </ScrollView>
@@ -424,6 +453,11 @@ const styles = StyleSheet.create({
   transactionDate: {
     fontSize: 13,
     color: colors.textSecondary,
+  },
+  transactionId: {
+    fontSize: 11,
+    color: colors.textSecondary,
+    marginTop: 2,
   },
   transactionAmount: {
     alignItems: 'flex-end',

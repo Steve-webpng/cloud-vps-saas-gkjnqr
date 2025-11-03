@@ -2,35 +2,45 @@
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, Alert, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { IconSymbol } from '@/components/IconSymbol';
 import { colors, commonStyles } from '@/styles/commonStyles';
+import { IconSymbol } from '@/components/IconSymbol';
 import { useVPSStore } from '@/stores/vpsStore';
+import { useRouter } from 'expo-router';
+import { isGeminiConfigured, isStripeConfigured } from '@/config/apiConfig';
 
 export default function SettingsScreen() {
-  const { userProfile, billingInfo } = useVPSStore();
+  const { user } = useVPSStore();
+  const router = useRouter();
 
   const handleEditProfile = () => {
-    Alert.alert('Edit Profile', 'This feature will allow you to edit your profile information');
+    Alert.alert('Edit Profile', 'Profile editing coming soon!');
   };
 
   const handleManageBilling = () => {
-    Alert.alert('Manage Billing', 'View and manage your billing information and payment methods');
+    Alert.alert('Manage Billing', 'Billing management coming soon!');
   };
 
   const handleAPIKeys = () => {
-    Alert.alert('API Keys', 'Manage your API keys for programmatic access');
+    const geminiStatus = isGeminiConfigured() ? '✓ Connected' : '✗ Not configured';
+    const stripeStatus = isStripeConfigured() ? '✓ Connected' : '✗ Not configured';
+    
+    Alert.alert(
+      'API Configuration',
+      `Gemini AI: ${geminiStatus}\nStripe Payments: ${stripeStatus}`,
+      [{ text: 'OK' }]
+    );
   };
 
   const handleSecurity = () => {
-    Alert.alert('Security', 'Manage security settings including 2FA and SSH keys');
+    Alert.alert('Security', 'Security settings coming soon!');
   };
 
   const handleNotifications = () => {
-    Alert.alert('Notifications', 'Configure notification preferences');
+    Alert.alert('Notifications', 'Notification settings coming soon!');
   };
 
   const handleSupport = () => {
-    Alert.alert('Support', 'Contact our support team or view documentation');
+    Alert.alert('Support', 'Contact support at support@vpsplatform.com');
   };
 
   const handleLogout = () => {
@@ -39,83 +49,113 @@ export default function SettingsScreen() {
       'Are you sure you want to logout?',
       [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Logout', style: 'destructive', onPress: () => console.log('Logout') },
+        { text: 'Logout', style: 'destructive', onPress: () => console.log('Logged out') },
       ]
     );
   };
 
+  const handleAIAssistant = () => {
+    router.push('/ai-assistant');
+  };
+
   return (
-    <SafeAreaView style={commonStyles.container} edges={['top']}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Settings</Text>
       </View>
 
       <ScrollView
         style={styles.scrollView}
-        contentContainerStyle={[
-          styles.contentContainer,
-          Platform.OS !== 'ios' && styles.contentContainerWithTabBar
-        ]}
+        contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
         {/* Profile Section */}
-        <View style={styles.profileCard}>
-          <View style={styles.avatarContainer}>
-            <IconSymbol name="person.circle.fill" size={64} color={colors.primary} />
+        <View style={styles.section}>
+          <View style={styles.profileCard}>
+            <View style={styles.avatarContainer}>
+              <IconSymbol name="person.circle.fill" size={64} color={colors.primary} />
+            </View>
+            <View style={styles.profileInfo}>
+              <Text style={styles.profileName}>{user.name}</Text>
+              <Text style={styles.profileEmail}>{user.email}</Text>
+            </View>
+            <Pressable style={styles.editButton} onPress={handleEditProfile}>
+              <IconSymbol name="pencil" size={20} color={colors.primary} />
+            </Pressable>
           </View>
-          <View style={styles.profileInfo}>
-            <Text style={styles.profileName}>{userProfile.name}</Text>
-            <Text style={styles.profileEmail}>{userProfile.email}</Text>
-            {userProfile.company && (
-              <Text style={styles.profileCompany}>{userProfile.company}</Text>
-            )}
-          </View>
-          <Pressable onPress={handleEditProfile} style={styles.editButton}>
-            <IconSymbol name="pencil" size={20} color={colors.primary} />
+        </View>
+
+        {/* AI Features Section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>AI Features</Text>
+          
+          <Pressable style={styles.settingItem} onPress={handleAIAssistant}>
+            <View style={styles.settingIcon}>
+              <IconSymbol name="sparkles" size={24} color={colors.primary} />
+            </View>
+            <View style={styles.settingInfo}>
+              <Text style={styles.settingTitle}>AI Assistant</Text>
+              <Text style={styles.settingDescription}>
+                Get AI-powered help and recommendations
+              </Text>
+            </View>
+            <IconSymbol name="chevron.right" size={20} color={colors.textSecondary} />
           </Pressable>
+
+          {isGeminiConfigured() && (
+            <View style={styles.statusBadge}>
+              <IconSymbol name="checkmark.circle.fill" size={16} color={colors.success} />
+              <Text style={styles.statusText}>Gemini AI Active</Text>
+            </View>
+          )}
         </View>
 
         {/* Account Section */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Account</Text>
           
-          <Pressable style={styles.menuItem} onPress={handleManageBilling}>
-            <View style={styles.menuItemLeft}>
-              <View style={[styles.menuIcon, { backgroundColor: colors.success + '20' }]}>
-                <IconSymbol name="creditcard.fill" size={20} color={colors.success} />
-              </View>
-              <View>
-                <Text style={styles.menuItemTitle}>Billing & Payments</Text>
-                <Text style={styles.menuItemSubtitle}>
-                  Balance: ${billingInfo.currentBalance.toFixed(2)}
-                </Text>
-              </View>
+          <Pressable style={styles.settingItem} onPress={handleManageBilling}>
+            <View style={styles.settingIcon}>
+              <IconSymbol name="creditcard.fill" size={24} color={colors.primary} />
+            </View>
+            <View style={styles.settingInfo}>
+              <Text style={styles.settingTitle}>Billing & Payments</Text>
+              <Text style={styles.settingDescription}>
+                Manage payment methods and invoices
+              </Text>
             </View>
             <IconSymbol name="chevron.right" size={20} color={colors.textSecondary} />
           </Pressable>
 
-          <Pressable style={styles.menuItem} onPress={handleAPIKeys}>
-            <View style={styles.menuItemLeft}>
-              <View style={[styles.menuIcon, { backgroundColor: colors.accent + '20' }]}>
-                <IconSymbol name="key.fill" size={20} color={colors.accent} />
-              </View>
-              <View>
-                <Text style={styles.menuItemTitle}>API Keys</Text>
-                <Text style={styles.menuItemSubtitle}>Manage programmatic access</Text>
-              </View>
+          {isStripeConfigured() && (
+            <View style={styles.statusBadge}>
+              <IconSymbol name="checkmark.circle.fill" size={16} color={colors.success} />
+              <Text style={styles.statusText}>Stripe Connected</Text>
+            </View>
+          )}
+
+          <Pressable style={styles.settingItem} onPress={handleAPIKeys}>
+            <View style={styles.settingIcon}>
+              <IconSymbol name="key.fill" size={24} color={colors.primary} />
+            </View>
+            <View style={styles.settingInfo}>
+              <Text style={styles.settingTitle}>API Configuration</Text>
+              <Text style={styles.settingDescription}>
+                View API connection status
+              </Text>
             </View>
             <IconSymbol name="chevron.right" size={20} color={colors.textSecondary} />
           </Pressable>
 
-          <Pressable style={styles.menuItem} onPress={handleSecurity}>
-            <View style={styles.menuItemLeft}>
-              <View style={[styles.menuIcon, { backgroundColor: colors.warning + '20' }]}>
-                <IconSymbol name="lock.fill" size={20} color={colors.warning} />
-              </View>
-              <View>
-                <Text style={styles.menuItemTitle}>Security</Text>
-                <Text style={styles.menuItemSubtitle}>2FA, SSH keys, passwords</Text>
-              </View>
+          <Pressable style={styles.settingItem} onPress={handleSecurity}>
+            <View style={styles.settingIcon}>
+              <IconSymbol name="lock.shield.fill" size={24} color={colors.primary} />
+            </View>
+            <View style={styles.settingInfo}>
+              <Text style={styles.settingTitle}>Security</Text>
+              <Text style={styles.settingDescription}>
+                Password, 2FA, and security settings
+              </Text>
             </View>
             <IconSymbol name="chevron.right" size={20} color={colors.textSecondary} />
           </Pressable>
@@ -125,15 +165,15 @@ export default function SettingsScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Preferences</Text>
           
-          <Pressable style={styles.menuItem} onPress={handleNotifications}>
-            <View style={styles.menuItemLeft}>
-              <View style={[styles.menuIcon, { backgroundColor: colors.primary + '20' }]}>
-                <IconSymbol name="bell.fill" size={20} color={colors.primary} />
-              </View>
-              <View>
-                <Text style={styles.menuItemTitle}>Notifications</Text>
-                <Text style={styles.menuItemSubtitle}>Configure alerts and emails</Text>
-              </View>
+          <Pressable style={styles.settingItem} onPress={handleNotifications}>
+            <View style={styles.settingIcon}>
+              <IconSymbol name="bell.fill" size={24} color={colors.primary} />
+            </View>
+            <View style={styles.settingInfo}>
+              <Text style={styles.settingTitle}>Notifications</Text>
+              <Text style={styles.settingDescription}>
+                Manage notification preferences
+              </Text>
             </View>
             <IconSymbol name="chevron.right" size={20} color={colors.textSecondary} />
           </Pressable>
@@ -143,15 +183,15 @@ export default function SettingsScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Support</Text>
           
-          <Pressable style={styles.menuItem} onPress={handleSupport}>
-            <View style={styles.menuItemLeft}>
-              <View style={[styles.menuIcon, { backgroundColor: colors.accent + '20' }]}>
-                <IconSymbol name="questionmark.circle.fill" size={20} color={colors.accent} />
-              </View>
-              <View>
-                <Text style={styles.menuItemTitle}>Help & Support</Text>
-                <Text style={styles.menuItemSubtitle}>Documentation and contact</Text>
-              </View>
+          <Pressable style={styles.settingItem} onPress={handleSupport}>
+            <View style={styles.settingIcon}>
+              <IconSymbol name="questionmark.circle.fill" size={24} color={colors.primary} />
+            </View>
+            <View style={styles.settingInfo}>
+              <Text style={styles.settingTitle}>Help & Support</Text>
+              <Text style={styles.settingDescription}>
+                Get help and contact support
+              </Text>
             </View>
             <IconSymbol name="chevron.right" size={20} color={colors.textSecondary} />
           </Pressable>
@@ -159,11 +199,11 @@ export default function SettingsScreen() {
 
         {/* Logout Button */}
         <Pressable style={styles.logoutButton} onPress={handleLogout}>
-          <IconSymbol name="arrow.right.square.fill" size={20} color={colors.danger} />
+          <IconSymbol name="arrow.right.square.fill" size={24} color={colors.error} />
           <Text style={styles.logoutText}>Logout</Text>
         </Pressable>
 
-        {/* App Version */}
+        {/* Version Info */}
         <Text style={styles.versionText}>Version 1.0.0</Text>
       </ScrollView>
     </SafeAreaView>
@@ -171,35 +211,44 @@ export default function SettingsScreen() {
 }
 
 const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
   header: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 20,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
   headerTitle: {
-    fontSize: 28,
+    fontSize: 32,
     fontWeight: '700',
     color: colors.text,
   },
   scrollView: {
     flex: 1,
   },
-  contentContainer: {
-    padding: 16,
-  },
-  contentContainerWithTabBar: {
+  scrollContent: {
+    padding: 20,
     paddingBottom: 100,
+  },
+  section: {
+    marginBottom: 32,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: colors.text,
+    marginBottom: 16,
   },
   profileCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.card,
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 24,
-    boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.08)',
-    elevation: 2,
+    backgroundColor: colors.cardBackground,
+    borderRadius: 16,
+    padding: 20,
+    boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.1)',
   },
   avatarContainer: {
     marginRight: 16,
@@ -208,7 +257,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   profileName: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '700',
     color: colors.text,
     marginBottom: 4,
@@ -216,73 +265,76 @@ const styles = StyleSheet.create({
   profileEmail: {
     fontSize: 14,
     color: colors.textSecondary,
-    marginBottom: 2,
-  },
-  profileCompany: {
-    fontSize: 13,
-    color: colors.textSecondary,
   },
   editButton: {
-    padding: 8,
-  },
-  section: {
-    marginBottom: 24,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: colors.text,
-    marginBottom: 12,
-    paddingHorizontal: 4,
-  },
-  menuItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: colors.card,
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 8,
-    boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.08)',
-    elevation: 2,
-  },
-  menuItemLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-    gap: 12,
-  },
-  menuIcon: {
     width: 40,
     height: 40,
-    borderRadius: 10,
+    borderRadius: 20,
+    backgroundColor: colors.primaryLight,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  menuItemTitle: {
+  settingItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.cardBackground,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+  },
+  settingIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: colors.primaryLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 16,
+  },
+  settingInfo: {
+    flex: 1,
+  },
+  settingTitle: {
     fontSize: 16,
     fontWeight: '600',
     color: colors.text,
-    marginBottom: 2,
+    marginBottom: 4,
   },
-  menuItemSubtitle: {
+  settingDescription: {
     fontSize: 13,
     color: colors.textSecondary,
+  },
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.successLight,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    alignSelf: 'flex-start',
+    marginTop: -6,
+    marginBottom: 12,
+    gap: 6,
+  },
+  statusText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.success,
   },
   logoutButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.danger + '20',
+    backgroundColor: colors.errorLight,
     borderRadius: 12,
     padding: 16,
-    marginTop: 8,
-    gap: 8,
+    marginTop: 16,
+    gap: 12,
   },
   logoutText: {
     fontSize: 16,
-    fontWeight: '600',
-    color: colors.danger,
+    fontWeight: '700',
+    color: colors.error,
   },
   versionText: {
     fontSize: 13,
