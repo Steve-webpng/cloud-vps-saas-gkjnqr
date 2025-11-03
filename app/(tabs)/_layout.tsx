@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { Platform } from 'react-native';
 import { NativeTabs, Icon, Label } from 'expo-router/unstable-native-tabs';
@@ -11,13 +12,19 @@ export default function TabLayout() {
       name: '(home)',
       route: '/(tabs)/(home)/',
       icon: 'house.fill',
-      label: 'Home',
+      label: 'Dashboard',
     },
     {
-      name: 'profile',
-      route: '/(tabs)/profile',
-      icon: 'person.fill',
-      label: 'Profile',
+      name: 'vps',
+      route: '/(tabs)/vps',
+      icon: 'server.rack',
+      label: 'VPS',
+    },
+    {
+      name: 'settings',
+      route: '/(tabs)/settings',
+      icon: 'gear',
+      label: 'Settings',
     },
   ];
 
@@ -27,11 +34,15 @@ export default function TabLayout() {
       <NativeTabs>
         <NativeTabs.Trigger name="(home)">
           <Icon sf="house.fill" drawable="ic_home" />
-          <Label>Home</Label>
+          <Label>Dashboard</Label>
         </NativeTabs.Trigger>
-        <NativeTabs.Trigger name="profile">
-          <Icon sf="person.fill" drawable="ic_profile" />
-          <Label>Profile</Label>
+        <NativeTabs.Trigger name="vps">
+          <Icon sf="server.rack" drawable="ic_server" />
+          <Label>VPS</Label>
+        </NativeTabs.Trigger>
+        <NativeTabs.Trigger name="settings">
+          <Icon sf="gear" drawable="ic_settings" />
+          <Label>Settings</Label>
         </NativeTabs.Trigger>
       </NativeTabs>
     );
@@ -43,11 +54,12 @@ export default function TabLayout() {
       <Stack
         screenOptions={{
           headerShown: false,
-          animation: 'none', // Remove fade animation to prevent black screen flash
+          animation: 'none',
         }}
       >
         <Stack.Screen name="(home)" />
-        <Stack.Screen name="profile" />
+        <Stack.Screen name="vps" />
+        <Stack.Screen name="settings" />
       </Stack>
       <FloatingTabBar tabs={tabs} />
     </>
